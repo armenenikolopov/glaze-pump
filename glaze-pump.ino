@@ -1,9 +1,10 @@
 // include the library code:
-#include <LiquidCrystal.h> //https://www.arduino.cc/en/Reference/LiquidCrystal -> LCD control
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h> //https://www.arduino.cc/en/Reference/LiquidCrystal -> LCD control
 #include <ClickEncoder.h> //https://github.com/0xPIT/encoder/blob/master/README.md -> Encoder processing (timer based)
 #include <TimerOne.h> //required for ClickEncoder.h 
 #include <EEPROM.h> //write and read EEPROM (to save and load settings)
-
+#include "ingredient_percentages.h"
 
 //LCD -----------------------------------------------------------------------------------
 #define LCD_PIN_D4 8
@@ -15,7 +16,7 @@
 #define LCD_COLUMNS 16
 #define LCD_ROWS 2
 // initialize the library with the numbers of the interface pins
-LiquidCrystal lcd(LCD_PIN_RS, LCD_PIN_EN, LCD_PIN_D4, LCD_PIN_D5, LCD_PIN_D6, LCD_PIN_D7);
+LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7,3,POSITIVE);
 
 //ENCODER --------------------------------------------------------------------------------
 #define ENCODER_PIN_BUTTON 2
@@ -88,9 +89,13 @@ typedef struct
   int lim;
   const char* options[4];
   const char* suffix;
-}menu_item;
+} menu_item;
 int menu_items_limit = 10-1;
 menu_item menu[10];
+
+//This is a grid of percentage compositions of flux, kaolin, and silica
+// as specified by Ian Currie in the book Revealing Glazes
+//https://leanpub.com/Revealing-Glazes-by-Ian-Currie/read
 
 
 //███ SETUP ████████████████████████████████████████████████████████████████████████████████████████████████████
@@ -147,10 +152,18 @@ void setup(){
  menu[6].name_ = "Mode:";
  menu[6].type = OPTION;
  menu[6].value = 0;
- menu[6].lim = 3-1;
+ menu[6].lim = 4-1;
  menu[6].options[0] = "Dose";
  menu[6].options[1] = "Pump";
  menu[6].options[2] = "Cal.";
+ menu[6].options[3] = "Seq.";
+
+
+//grid vol ml
+//Flux dry/ml/
+//Kaolin dry/ml
+//Quartz dry/ml
+//Start Cell: 1 ((maybe row&cell))
 
  menu[7].name_ = "Cal.";
  menu[7].type = VALUE;
@@ -159,17 +172,34 @@ void setup(){
  menu[7].lim = 20000;
  menu[7].suffix="mL";
 
- menu[8].name_ = "Save Sett.";
- menu[8].type = ACTION;
+ menu[8].name_ = "Seq Type";
+ menu[8].type = OPTION;
  menu[8].value = 0;
- menu[8].lim = 0;
- menu[8].suffix = "OK!";
+ menu[8].lim = 3-1;
+ menu[8].options[0] = "Flux";
+ menu[8].options[1] = "Kaolin";
+ menu[8].options[2] = "Silica";
 
- menu[9].name_ = "USB Ctrl";
+
+ menu[9].name_ = "Save Sett.";
  menu[9].type = ACTION;
  menu[9].value = 0;
  menu[9].lim = 0;
- menu[9].suffix = "ON!";
+ menu[9].suffix = "OK!";
+
+ menu[10].name_ = "USB Ctrl";
+ menu[10].type = ACTION;
+ menu[10].value = 0;
+ menu[10].lim = 0;
+ menu[10].suffix = "ON!";
+
+ menu[11].name_ = "Grid Vol";
+ menu[11].type = VALUE;
+ menu[11].value = 30;
+ menu[11].decimals = 1;
+ menu[11].lim = 999;
+ menu[11].suffix="mg";
+
 
   for (int i=0; i <= menu_items_limit; i++){
       menu[i].value = eepromReadInt(i*2);
@@ -520,6 +550,9 @@ cal = (cal/CALIBR_ROTATIONS)/CALIBR_DECIMAL_CORR;
 }
 
 //_____________________________________________________________________________________________
+
+
+// It seems like I should really write something to just render an LCD line if this is what we continue to use.
 
 void update_lcd(){
     lcd.clear();
